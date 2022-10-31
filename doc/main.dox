@@ -1,0 +1,45 @@
+/*! \mainpage Coro
+ *
+ * \tableofcontents
+ *
+ * Introduction, author, current status, build and run instructions:
+ * <a href="../README.html">README.md</a>
+ *
+ * License: <a href="../LICENSE.html">LICENSE.md</a>
+ *
+ * \section Use_Coro Use Coro
+ *
+ * \arg the top-level source code directory \link ../src src/\endlink
+ * \arg namespace \ref coro
+ * \arg header file coro/coro.hpp
+ * \arg the tests directory \link ../test test/\endlink
+ *
+ * \section Build_targets Build targets
+ *
+ * The main targets for CMake and \c make:
+ *
+ * \arg \c all -- Build all test programs. It also calls target \c doc.
+ *
+ * \arg \c clang-tidy -- Check C++ sources by \c clang-tidy.
+ *
+ * \arg \c clean -- Remove created files.
+ *
+ * \arg \c clean-tidy -- Remove files \c *.tidy containing problems founds
+ * by \c clang-tidy.
+ *
+ * \arg \c doc -- Generate HTML documentation from Markdown sources
+ *
+ * \arg \c doxygen -- Generate documentation by Doxygen.
+ *
+ * \arg \c full -- Calls targets \c clean, \c all, \c doxygen, \c clean-tidy,
+ * \c clang-tidy, \c test.
+ *
+ * \arg \c test -- Runs tests by command \c ctest.
+ *
+ * \section Tests Tests
+ *
+ * Tests of C++ code are implemented using <a
+ * href="https://www.boost.org/doc/libs/release/libs/test/">Boost::Test</a> in
+ * directory \link ../test test/\endlink.
+ * Tests are built and executed by CMake's CTest.
+ */
