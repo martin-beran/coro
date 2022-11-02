@@ -44,7 +44,7 @@ template <class Promise> struct log_handle: std::coroutine_handle<Promise> {
     //! Default move
     log_handle(log_handle&&) noexcept = default;
     //! Logs destruction of the object
-    virtual ~log_handle() {
+    ~log_handle() {
         log() << this << "->~log_handle()";
     }
     //! Default copy
@@ -75,7 +75,7 @@ struct log_promise {
     //! Default move
     log_promise(log_promise&&) noexcept = default;
     //! Logs destruction of the object
-    virtual ~log_promise() {
+    ~log_promise() {
         log() << this << "->~log_promise()";
     }
     //! Default copy
@@ -86,7 +86,7 @@ struct log_promise {
     log_promise& operator=(log_promise&&) noexcept = default;
     //! Creates the return value for the first suspend
     /*! \return a coroutine handle */
-    virtual Handle get_return_object() {
+    Handle get_return_object() {
         Handle h{Handle::from_promise(*this)};
         if constexpr (impl::printable<Handle>)
             log() << "log_handle(" << this << ")->get_return_object()=" << h;
@@ -96,7 +96,7 @@ struct log_promise {
     }
     //! Creates the initial suspend object
     /*! \return a default-constructed \a InitialSuspend */
-    virtual InitialSuspend initial_suspend() {
+    InitialSuspend initial_suspend() {
         InitialSuspend s{};
         if constexpr (impl::printable<InitialSuspend>)
             log() << "log_handle(" << this << ")->initial_suspend()=" << s;
@@ -106,7 +106,7 @@ struct log_promise {
     }
     //! Creates the final suspend object
     /*! \return a default-constructed \a FinalSuspend */
-    virtual FinalSuspend final_suspend() {
+    FinalSuspend final_suspend() {
         FinalSuspend s{};
         if constexpr (impl::printable<FinalSuspend>)
             log() << "log_handle(" << this << ")->final_suspend()=" << s;
@@ -115,7 +115,7 @@ struct log_promise {
         return s;
     }
     //! Called by \c co_return or falling off of a void-returning coroutine
-    virtual void return_void() {
+    void return_void() {
         log() << "log_handle(" << this << ")->return_void()";
     };
     //! Called by \c co_return with an expression
@@ -125,21 +125,13 @@ struct log_promise {
     template <class Expr> requires impl::transformer<Return<Expr>>
     typename Return<Expr>::type return_value(Expr&& expr) {
         if constexpr (impl::printable<Expr>)
-            log_return_value([&expr](log& l) { std::move(l) << expr; });
+            log() << "log_handle(" << this << ")->return_value(" << expr << ")";
         else
-            log_return_value([](log&) {});
+            log() << "log_handle(" << this << ")->return_value()";
         return typename Return<Expr>::type{std::forward<Expr>(expr)};
     }
-    //! Logs a call of return_value().
-    /*! \param[in] f a function that logs the value passed to return_value() */
-    virtual void log_return_value(const std::function<void(log&)>& f) {
-        log l{};
-        std::move(l) << "log_handle(" << this << ")->return_value(";
-        f(l);
-        std::move(l) << ")";
-    }
     //! Called if a coroutine body is terminated by an exception
-    virtual void unhandled_exception() {
+    void unhandled_exception() {
         try {
             std::rethrow_exception(std::current_exception());
         } catch (std::exception& e) {
@@ -158,19 +150,11 @@ struct log_promise {
     template <class Expr> requires impl::transformer<Await<Expr>>
     typename Await<Expr>::type await_transform(Expr&& expr) {
         if constexpr (impl::printable<Expr>)
-            log_await_transform([&expr](log& l) { std::move(l) << expr; });
+            log() << "log_handle(" << this << ")->log_await_transform(" <<
+                expr << ")";
         else
-            log_await_transform([](log&) {});
+            log() << "log_handle(" << this << ")->log_await_transform()";
         return typename Await<Expr>::type{std::forward<Expr>(expr)};
-    }
-    //! Logs a call of await_transform().
-    /*! \param[in] f a function that logs the value passed to await_transform()
-     */
-    virtual void log_await_transform(const std::function<void(log&)>& f) {
-        log l{};
-        std::move(l) << "log_handle(" << this << ")->log_await_transform(";
-        f(l);
-        std::move(l) << ")";
     }
 };
 
