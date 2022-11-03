@@ -34,7 +34,8 @@ set(
     "Select a build type (${BUILD_TYPES})"
 )
 
-option(TEMPORARY_DEBUG "Enable use of coro::DEBUG class" OFF)
+option(ENABLE_TEMPORARY_DEBUG "Enable use of coro::DEBUG class" OFF)
+option(ENABLE_LOG "Enable logging" ON)
 
 set(
     SANITIZER "OFF" CACHE STRING
@@ -75,8 +76,11 @@ add_compile_options(
     -Wswitch-default -Wswitch-enum
 )
 include_directories(${CMAKE_SOURCE_DIR}/src ${CMAKE_BINARY_DIR}/src)
-if (TEMPORARY_DEBUG)
-    add_compile_definitions(TEMPORARY_DEBUG)
+if (ENABLE_TEMPORARY_DEBUG)
+    add_compile_definitions(ENABLE_TEMPORARY_DEBUG)
+endif()
+if (NOT ENABLE_LOG)
+    add_compile_definitions(ENABLE_LOG=false)
 endif()
 if (NOT SANITIZER STREQUAL "OFF")
     add_compile_options(
@@ -194,5 +198,6 @@ message(STATUS "Doxygen:     ${DOXYGEN_FOUND} ${DOXYGEN_VERSION}")
 message(STATUS "Markdown:    ${MARKDOWN}")
 message(STATUS "Clang-tidy:  ${CLANG_TIDY}")
 message(STATUS "Build tests: ${BUILD_TESTING}")
-message(STATUS "DEBUG:       ${TEMPORARY_DEBUG}")
+message(STATUS "DEBUG:       ${ENABLE_TEMPORARY_DEBUG}")
+message(STATUS "Logging:     ${ENABLE_LOG}")
 message(STATUS "Sanitizer:   ${SANITIZER}")

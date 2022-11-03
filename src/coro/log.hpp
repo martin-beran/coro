@@ -30,7 +30,12 @@
  * instance is a compile time error. It can be used to make sure that all
  * temporary debugging messages have been removed in a non-debug build. It is
  * controlled by CMake. */
-#define TEMPORARY_DEBUG
+#define ENABLE_TEMPORARY_DEBUG
+#endif
+
+#ifndef ENABLE_LOG
+//! This macro globally enables or disables logging
+#define ENABLE_LOG true
 #endif
 
 #ifndef LOG_OUTPUT_ENV
@@ -92,6 +97,10 @@ namespace coro {
  * \test in file test_log.cpp */
 class log {
 public:
+    //! Enables or disables logging globally
+    /*! \note Using this member variable instead of using the macro directly
+     * silences some warnings about Boolean literals in conditions. */
+    static constexpr bool log_enable = ENABLE_LOG;
     //! The name of the environment variable that selects a debugging output.
     static constexpr std::string_view env_var_output = LOG_OUTPUT_ENV;
     //! The name of the environment variable that defines a message format.
@@ -176,8 +185,9 @@ private:
      * \param[in] v a value to be written
      * \return \a dbg */
     template <class T> friend log&& operator<<(log&& dbg, T&& v) {
-        if (dbg.os)
-            *dbg.os << std::forward<T>(v);
+        if constexpr (log_enable)
+            if (dbg.os)
+                *dbg.os << std::forward<T>(v);
         return std::move(dbg);
     }
 };
@@ -188,13 +198,13 @@ private:
  * needed. To distinguish normal and temporary messages, each message generated
  * by \ref DEBUG is prefixed by log::prefix.
  *
- * An instance of \ref DEBUG may be created only if macro TEMPORARY_DEBUG is
- * defined.
+ * An instance of \ref DEBUG may be created only if macro
+ * ENABLE_TEMPORARY_DEBUG is defined.
  *
  * \note The name of this class is in upper case and does not follow the code
  * style rules in order to be easily found in source code. */
 class DEBUG: public log {
-#ifdef TEMPORARY_DEBUG
+#ifdef ENABLE_TEMPORARY_DEBUG
 public:
 #endif
     //! Default constructor. It writes the message prefix.
@@ -228,6 +238,8 @@ inline log::log(bool write_prefix, const boost::source_location& loc):
 #endif
     lck(init())
 {
+    if constexpr (!log_enable)
+        return;
     if (active) {
         assert(!lck);
         return;
@@ -272,6 +284,8 @@ inline log::log(bool write_prefix, const boost::source_location& loc):
 
 inline log::~log()
 {
+    if constexpr (!log_enable)
+        return;
     if (lck) {
         std::move(*this) << std::endl<char, std::ostream::traits_type>;
         active = false;
@@ -280,6 +294,8 @@ inline log::~log()
 
 inline std::unique_lock<std::mutex> log::init()
 {
+    if constexpr (!log_enable)
+        return {};
     if (active)
         return {};
     static std::once_flag once;
