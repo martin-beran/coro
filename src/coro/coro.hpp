@@ -29,17 +29,73 @@ template <class T> concept transformer = requires {
     typename T::type;
 };
 
-//! A type that does not satisfy coro::impl::transformer
-/*! \tparam T a mapped type */
-template <class T> struct not_transformer {};
+//! A helper concept
+/*! It is used to choose between declaring \c return_void() or \c
+ * return_value() in a promise class.
+ * \tparam T a class */
+template <class T> concept return_void = T::return_void;
+
+//! The base class that declares \c return_void() for log_promise
+struct declare_return_void {
+    //! Called by \c co_return or falling off of a void-returning coroutine
+    /*! \note The dummy template parameter turns this function to a template
+     * and so allows it to be conditionally declared. */
+    void return_void() {
+        log() << "log_handle(" << this << ")->return_void()";
+    }
+};
+
+//! The base class that declares \c return_value() for log_promise
+/*! \tparam Promise the derived promise class
+ * \tparam Return the coroutine return type */
+template <class Promise, class Return> struct declare_return_value {
+    //! Called by \c co_return with an expression
+    /*! Calls return_value_impl(), which can be overriden in a derived \a
+     * Promise class in order to use the returned value.
+     * \param[in] expr the value returned by \c co_return */
+    void return_value(Return&& expr) {
+        if constexpr (impl::printable<Return>)
+            log() << "log_handle(" << this << ")->return_value(" << expr << ")";
+        else
+            log() << "log_handle(" << this << ")->return_value()";
+        static_cast<Promise*>(this)->
+            template return_value_impl(std::move(expr));
+    }
+protected:
+    //! Uses a value passed to \c co_return.
+    /*! It does nothing by default, but it can be overriden in a derived \a
+     * Promise class
+     * \param[in] expr the value from \c co_return, passed by return_value() */
+    template <class>
+    void return_value_impl([[maybe_unused]] Return&& expr) {
+    }
+};
+
+//! The base class of log_promise
+/*! \tparam Promise the derived promise class
+ * \tparam Return template argument \a Return of log_promise
+ * \note Direct declaration in log_promise of \c return_void() and \c
+ * return_value(), guarded by appropriate constraints that select one of these
+ * functions, does not work, because the compiler (tested in GCC 11.3.0) treats
+ * both functions as declared and fails. */
+template <class Promise, class Return> struct return_void_or_value:
+    std::conditional_t<std::is_void_v<Return>,
+    declare_return_void, declare_return_value<Promise, Return>>
+{
+};
 
 } // namespace impl
 
+//! A template that does not satisfy coro::impl::transformer for any type
+/*! \tparam T a mapped type */
+template <class T> struct not_transformer {
+    //! Used to define return_void() instead of return_value() in log_promise
+    static constexpr bool return_void = true;
+};
+
 //! A coroutine handle with logging at interesting places
-/*! \tparam Promise the related promise type
- * \tparam Yield mapping of the parameter type to the return type of
- * yield_value() */
-template <class Promise, template <class> class Yield = impl::not_transformer>
+/*! \tparam Promise the related promise type */
+template <class Promise>
 struct log_handle: std::coroutine_handle<Promise> {
     //! The related promise type
     using promise_type = Promise;
@@ -61,33 +117,26 @@ struct log_handle: std::coroutine_handle<Promise> {
     //! Default move
     /*! \return \c *this */
     log_handle& operator=(log_handle&&) noexcept = default;
-    //! Called by \c co_yield
-    /*! It is not defined if \c Yield<Expr> does not satisfy impl::transformer,
-     * which causes disabling \c co_yield.
-     * \tparam Expr the type of expression passed to \c co_yield
-     * \param[in] expr the expression passed to \c co_yield
-     * \return transformed \a expr */
-    template <class Expr> requires impl::transformer<Yield<Expr>>
-    typename Yield<Expr>::type yield_value(Expr&& expr) {
-        if constexpr (impl::printable<Expr>)
-            log() << "log_promise(" << this << ")->yield_value(" << expr << ")";
-        else
-            log() << "log_promise(" << this << ")->yield_value()";
-        return typename Yield<Expr>::type{std::forward<Expr>(expr)};
-    }
 };
 
 //! A coroutine promise type with logging at interesting places
-/*! \tparam Handle the related coroutine handle object
+/*! \tparam Promise the derived promise class
+ * \tparam RetObj the return type of get_return_object(), its constructor is
+ * called with argument \c *this
  * \tparam InitialSuspend the return type of initial_suspend()
  * \tparam FinalSuspend the return type of final_suspend()
- * \tparam Return mapping of the parameter type to the return type of
- * return_value()
+ * \tparam Return the type usable in \c co_return; if it is \c void,
+ * return_value() is not defined and return_void() is defined instead
  * \tparam Await mapping of the parameter type to the return type of
- * await_transform() */
-template <class Handle, class InitialSuspend, class FinalSuspend,
-    template <class> class Return, template <class> class Await>
-struct log_promise {
+ * await_transform()
+ * \tparam Yield mapping of the parameter type to the return type of
+ * yield_value() */
+template <class Promise, class RetObj, class InitialSuspend, class FinalSuspend,
+    class Return, template <class> class Await,
+    template <class> class Yield = not_transformer>
+struct log_promise: impl::return_void_or_value<Promise, Return> {
+    //! A shortcut without template arguments for the current type
+    using log_promise_type = log_promise;
     //! Logs construction of the object
     log_promise() {
         log() << this << "->log_promise()";
@@ -108,13 +157,14 @@ struct log_promise {
     log_promise& operator=(log_promise&&) noexcept = default;
     //! Creates the return value for the first suspend
     /*! \return a coroutine handle */
-    Handle get_return_object() {
-        Handle h{Handle::from_promise(*this)};
-        if constexpr (impl::printable<Handle>)
-            log() << "log_handle(" << this << ")->get_return_object()=" << h;
+    RetObj get_return_object() {
+        RetObj r{*static_cast<Promise*>(this)};
+        if constexpr (impl::printable<RetObj>)
+            log() << "log_promise(" << this << ")->get_return_object()=" <<
+                &r << "/" << r;
         else
-            log() << "log_handle(" << this << ")->get_return_object()";
-        return h;
+            log() << "log_promise(" << this << ")->get_return_object()=" << &r;
+        return r;
     }
     //! Creates the initial suspend object
     /*! \return a default-constructed \a InitialSuspend */
@@ -127,30 +177,18 @@ struct log_promise {
         return s;
     }
     //! Creates the final suspend object
-    /*! \return a default-constructed \a FinalSuspend */
-    FinalSuspend final_suspend() {
+    /*! \return a default-constructed \a FinalSuspend
+     * \note C++20 requires \c noexcept. */
+    FinalSuspend final_suspend() noexcept {
         FinalSuspend s{};
-        if constexpr (impl::printable<FinalSuspend>)
-            log() << "log_handle(" << this << ")->final_suspend()=" << s;
-        else
-            log() << "log_handle(" << this << ")->final_suspend()";
+        try {
+            if constexpr (impl::printable<FinalSuspend>)
+                log() << "log_handle(" << this << ")->final_suspend()=" << s;
+            else
+                log() << "log_handle(" << this << ")->final_suspend()";
+        } catch (...) {
+        }
         return s;
-    }
-    //! Called by \c co_return or falling off of a void-returning coroutine
-    void return_void() {
-        log() << "log_handle(" << this << ")->return_void()";
-    };
-    //! Called by \c co_return with an expression
-    /*! \tparam Expr the type of expression returned by \c co_return
-     * \param[in] expr the value returned by \c co_return
-     * \return a value of type \c Return<Expr>::type constructed from \a expr */
-    template <class Expr> requires impl::transformer<Return<Expr>>
-    typename Return<Expr>::type return_value(Expr&& expr) {
-        if constexpr (impl::printable<Expr>)
-            log() << "log_handle(" << this << ")->return_value(" << expr << ")";
-        else
-            log() << "log_handle(" << this << ")->return_value()";
-        return typename Return<Expr>::type{std::forward<Expr>(expr)};
     }
     //! Called if a coroutine body is terminated by an exception
     void unhandled_exception() {
@@ -177,6 +215,20 @@ struct log_promise {
         else
             log() << "log_handle(" << this << ")->log_await_transform()";
         return typename Await<Expr>::type{std::forward<Expr>(expr)};
+    }
+    //! Called by \c co_yield
+    /*! It is not defined if \c Yield<Expr> does not satisfy impl::transformer,
+     * which causes disabling \c co_yield.
+     * \tparam Expr the type of expression passed to \c co_yield
+     * \param[in] expr the expression passed to \c co_yield
+     * \return transformed \a expr */
+    template <class Expr> requires impl::transformer<Yield<Expr>>
+    typename Yield<Expr>::type yield_value(Expr&& expr) {
+        if constexpr (impl::printable<Expr>)
+            log() << "log_promise(" << this << ")->yield_value(" << expr << ")";
+        else
+            log() << "log_promise(" << this << ")->yield_value()";
+        return typename Yield<Expr>::type{std::forward<Expr>(expr)};
     }
 };
 
@@ -224,7 +276,8 @@ struct log_awaitable {
 
 //! Controls if <tt>operator co_await()</tt> is defined for type \a T.
 /*! The operator is not defined by default, but can be enabled by defining
- * specializations derived from \c std::true_type. */
+ * specializations derived from \c std::true_type.
+ * \tparam T a type */
 template <class T> struct define_co_await: std::false_type {};
 
 //! A non-member alternative to log_awaitable::operator co_await()

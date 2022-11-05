@@ -8,6 +8,7 @@ set(
     TEST_PROGRAMS
     dummy_boost
     log
+    sync
 )
 
 foreach (P ${TEST_PROGRAMS})
