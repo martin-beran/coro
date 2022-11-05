@@ -71,11 +71,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # -Wswitch-default generates a warning in a coroutine for the internally
 # generated switch used to implement the coroutine (tested in GCC 11.3.0)
+# -Wmismatched-new-delete warns on coro::log_promise (de)allocation
 add_compile_options(
     -Wall -Wextra -pedantic -Werror
     -Wconversion -Wsign-conversion
     -Wimplicit-fallthrough=5
     -Wswitch-enum
+    -Wno-mismatched-new-delete
 )
 include_directories(${CMAKE_SOURCE_DIR}/src ${CMAKE_BINARY_DIR}/src)
 if (ENABLE_TEMPORARY_DEBUG)

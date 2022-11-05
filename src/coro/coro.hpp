@@ -155,6 +155,23 @@ struct log_promise: impl::return_void_or_value<Promise, Return> {
     //! Default move
     /*! \return \c *this */
     log_promise& operator=(log_promise&&) noexcept = default;
+    //! Used to allocate coroutine state
+    /*! \param[in] count number of bytes to allocate
+     * \return pointer to allocated memory */
+    static void* operator new(size_t count) {
+        void* p = ::operator new(count);
+        log() << "log_promise::operator new(" << count << ")=" << p;
+        return p;
+    }
+    //! Used to deallocate coroutine state
+    /*! \param[in] p pointer to memory to be deallocated */
+    static void operator delete(void* p) noexcept {
+        try {
+            log() << "log_promise::operator delete(" << p << ")";
+        } catch (...) {
+        }
+        ::operator delete(p);
+    }
     //! Creates the return value for the first suspend
     /*! \return a coroutine handle */
     RetObj get_return_object() {
