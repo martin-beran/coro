@@ -36,6 +36,7 @@ public:
             if (_result)
                 *_result = std::forward<T>(expr);
         }
+        //! The place for coroutine result in the coroutine type
         result_type* _result = nullptr;
     };
     //! The constructor needed by log_promise::get_return_object()
@@ -46,7 +47,7 @@ public:
     //! Gets the result of the coroutine.
     /*! It moves the value from an internal storage, therefore it may be called
      * at most once.
-     * \copydetails result() const & */
+     * \copydetails result() const */
     template <std::same_as<R> T = R> requires (!std::is_void_v<T>)
     T result() && {
         return std::move(_result);
@@ -57,7 +58,7 @@ public:
      * R is not \c void
      * \return the stored result of the coroutine */
     template <std::same_as<R> T = R> requires (!std::is_void_v<T>)
-    const T& result() const & {
+    const T& result() const {
         return _result;
     }
 private:

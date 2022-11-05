@@ -13,6 +13,11 @@ Martin Beran
 This software is available under the terms of BSD 2-Clause License, see
 file [LICENSE.md](LICENSE.html).
 
+## Development status
+
+_This is a work in progress. It is incomplete, probably buggy, and not suitable
+for any production use._
+
 ## Repository structure
 
 - `doc/` – documentation
