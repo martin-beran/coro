@@ -1,18 +1,18 @@
 #pragma once
 
 /*! \file
- * \brief A coroutine that never suspends and executes synchronously
+ * \prief A coroutine that is started lazily
  */
 
 #include "coro.hpp"
+#include <coroutine>
 
 namespace coro {
 
-//! A coroutine type that never suspends and executes synchronously.
-/*! The function is called immediately when the coroutine object is created.
- * \tparam R the result type of the coroutine
- * \test in file test_sync.cpp */
-template <class R> class sync {
+//! A coroutine type that is executed lazily when the return value is retrieved
+/*! \tparam R the result type of the coroutine
+ * \test in file test_lazy.cpp */
+template <class R> class lazy {
     //! A helper class for void return value.
     struct empty {};
     //! The type for storing coroutine result
@@ -23,8 +23,8 @@ public:
     using handle_type = log_handle<promise_type>;
     //! The coroutine promise type
     struct promise_type:
-        log_promise<promise_type, sync, std::suspend_never, std::suspend_never,
-            R, not_transformer>
+        log_promise<promise_type, lazy,
+            std::suspend_always, std::suspend_always, R, not_transformer>
     {
         //! Stores the result value from \c co_return
         /*! \tparam T a template parameter used only to make this member
@@ -33,16 +33,20 @@ public:
          * \param[in] expr the value from \c co_return */
         template <std::same_as<R> T = R> requires (!std::is_void_v<T>)
         void return_value_impl(T&& expr) {
-            if (_result)
-                *_result = std::forward<T>(expr);
+            result = std::forward<T>(expr);
         }
         //! The place for coroutine result in the coroutine type
-        result_type* _result = nullptr;
+        [[no_unique_address]] result_type result;
     };
     //! The constructor needed by log_promise::get_return_object()
     /*! \param[in] promise the promise object */
-    explicit sync(promise_type& promise) {
-        promise._result = &_result;
+    explicit lazy(promise_type& promise):
+        handle(handle_type::from_promise(promise))
+    {
+    }
+    //! Destroys the coroutine
+    ~lazy() {
+        handle.destroy();
     }
     //! Gets the result of the coroutine.
     /*! It moves the value from an internal storage, therefore it may be called
@@ -50,7 +54,8 @@ public:
      * \copydetails result() const */
     template <std::same_as<R> T = R> requires (!std::is_void_v<T>)
     T result() && {
-        return std::move(_result);
+        run();
+        return std::move(handle.promise().result);
     }
     //! Gets the result of the coroutine.
     /*! \tparam T a template parameter used only to make this member
@@ -58,12 +63,18 @@ public:
      * R is not \c void
      * \return the stored result of the coroutine */
     template <std::same_as<R> T = R> requires (!std::is_void_v<T>)
-    const T& result() const {
-        return _result;
+    const T& result() & {
+        run();
+        return handle.promise().result;
+    }
+    //! Runs the coroutine
+    void run() {
+        if (!handle.done())
+            handle.resume();
     }
 private:
-    //! The internal storage of the return value.
-    [[no_unique_address]] result_type _result;
+    //! The coroutine handle
+    handle_type handle;
 };
 
 } // namespace coro

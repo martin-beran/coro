@@ -97,11 +97,18 @@ template <class T> struct not_transformer {
 /*! \tparam Promise the related promise type */
 template <class Promise>
 struct log_handle: std::coroutine_handle<Promise> {
+    //! The base type
+    using base_type = std::coroutine_handle<Promise>;
     //! The related promise type
     using promise_type = Promise;
     //! Logs constuction of the object
     log_handle() {
         log() << this << "->log_handle()";
+    }
+    //! Logs construction of the object
+    /*! \param[in] p a promise object */
+    explicit log_handle(const base_type& p): base_type(p) {
+        log() << this << "->log_handle(Promise=" << &p << ")";
     }
     //! Default copy
     log_handle(const log_handle&) = default;

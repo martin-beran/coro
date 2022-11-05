@@ -7,6 +7,7 @@ link_libraries(
 set(
     TEST_PROGRAMS
     dummy_boost
+    lazy
     log
     sync
 )

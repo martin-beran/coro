@@ -5,7 +5,7 @@
 //! \cond
 #include "coro/sync.hpp"
 
-#define BOOST_TEST_MODULE log
+#define BOOST_TEST_MODULE sync
 #define BOOST_TEST_DYN_LINK
 #include <boost/test/unit_test.hpp>
 
@@ -20,6 +20,7 @@ BOOST_AUTO_TEST_CASE(return_void)
     std::string val{};
     struct coroutine {
         coro::sync<void> operator()(std::string& val) {
+            coro::log() << "coroutine running";
             val.append("Hello World!");
             co_return;
         }
@@ -37,6 +38,7 @@ BOOST_AUTO_TEST_CASE(return_value)
 {
     struct coroutine {
         coro::sync<std::string> operator()() {
+            coro::log() << "coroutine running";
             co_return std::string{"Hello World!"};
         }
     };
