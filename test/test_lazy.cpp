@@ -1,5 +1,5 @@
 /*! \file
- * \brief Tests of coro::sync
+ * \brief Tests of coro::lazy
  */
 
 //! \cond

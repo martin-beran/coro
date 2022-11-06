@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(int_seq)
     BOOST_CHECK(!co().has_value());
     coro::log() << "coroutine done";
 }
-//! \\endcond
+//! \endcond
 
 /*! \file
  * \test infinite_seq -- a coro::generator coroutine returning an infinite
@@ -114,4 +114,4 @@ BOOST_AUTO_TEST_CASE(infinite_seq)
     }
     BOOST_CHECK_EQUAL(max, 18);
 }
-//! \\endcond
+//! \endcond

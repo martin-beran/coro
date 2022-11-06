@@ -52,8 +52,10 @@ public:
         handle.destroy();
     }
     //! Default copy
+    /*! \return \c *this */
     lazy& operator=(const lazy&) = default;
     //! Default move
+    /*! \return \c *this */
     lazy& operator=(lazy&&) noexcept = default;
     //! Gets the result of the coroutine.
     /*! It moves the value from an internal storage, therefore it may be called

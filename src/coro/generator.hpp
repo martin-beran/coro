@@ -41,6 +41,8 @@ public:
         //! The current generated value
         std::optional<R> current;
     };
+    //! The iterator class associated with \ref generator
+    /*! End iterators for all \ref generator objects compare as equal. */
     class iterator {
     public:
         //! Creates the end iterator.
@@ -84,8 +86,10 @@ public:
         handle.destroy();
     }
     //! Default copy
+    /*! \return \c *this */
     generator& operator=(const generator&) = default;
     //! Default move
+    /*! \return \c *this */
     generator& operator=(generator&&) noexcept = default;
     //! Gets the next generated value.
     /*! \return the next value or \c std::nullopt at the end of the sequence */
@@ -105,7 +109,7 @@ public:
             return {};
     }
     //! Gets the end 
-    //
+    /*! \return the end iterator */
     static constexpr iterator end() {
         return {};
     }
