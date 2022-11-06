@@ -11,6 +11,7 @@ set(
     lazy
     log
     sync
+    task
 )
 
 foreach (P ${TEST_PROGRAMS})

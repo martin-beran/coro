@@ -387,7 +387,7 @@ template <class Awaiter, bool Log = true> struct log_awaiter {
     }
     //! Gets the result of \c co_await.
     /*! \return the result of \c Awaiter::await_resume_impl() */
-    auto await_resume_impl() {
+    auto await_resume() {
         using result_type =
             decltype(static_cast<Awaiter*>(this)->await_resume_impl());
         if constexpr (std::is_void_v<result_type>) {
@@ -412,5 +412,17 @@ template <class Awaiter> struct log_avaitable_awaiter:
     log_awaiter<Awaiter, false>
 {
 };
+
+//!  A concept that defines requirements for a coroutine scheduler
+/*! It has operations for registering, unregistering, and resuming coroutines.
+ * \tparam T a scheduler class */
+template <class T> concept scheduler =
+    requires (T sched, std::coroutine_handle<void> co, typename T::iterator it)
+    {
+        typename T::iterator;
+        { sched.insert(co) } -> std::same_as<typename T::iterator>;
+        sched.erase(it);
+        { sched.resume(it) } -> std::same_as<std::coroutine_handle<void>>;
+    };
 
 } // namespace coro
