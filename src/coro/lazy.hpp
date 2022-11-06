@@ -1,11 +1,10 @@
 #pragma once
 
 /*! \file
- * \prief A coroutine that is started lazily
+ * \brief A coroutine that is started lazily
  */
 
 #include "coro.hpp"
-#include <coroutine>
 
 namespace coro {
 
@@ -39,19 +38,27 @@ public:
         [[no_unique_address]] result_type result;
     };
     //! The constructor needed by log_promise::get_return_object()
-    /*! \param[in] promise the promise object */
+    /*! It stores the coroutine handle.
+     * \param[in] promise the promise object */
     explicit lazy(promise_type& promise):
         handle(handle_type::from_promise(promise))
-    {
-    }
+    {}
+    //! Default copy
+    lazy(const lazy&) = default;
+    //! Default move
+    lazy(lazy&&) noexcept = default;
     //! Destroys the coroutine
     ~lazy() {
         handle.destroy();
     }
+    //! Default copy
+    lazy& operator=(const lazy&) = default;
+    //! Default move
+    lazy& operator=(lazy&&) noexcept = default;
     //! Gets the result of the coroutine.
     /*! It moves the value from an internal storage, therefore it may be called
      * at most once.
-     * \copydetails result() const */
+     * \copydetails result()& */
     template <std::same_as<R> T = R> requires (!std::is_void_v<T>)
     T result() && {
         run();
