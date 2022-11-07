@@ -18,7 +18,10 @@ namespace coro {
  * \tparam R the result type of the coroutine
  * \tparam Sched the scheduler type used for suspending and resuming
  * \test in file test_task.cpp */
-template <class R, scheduler Sched> class task {
+template <class R, scheduler Sched> class task:
+        public log_awaitable<task<R, Sched>&, std::type_identity>,
+        public log_awaiter<task<R, Sched>>
+{
     //! A helper class for void return value
     struct empty {};
     //! The type for storing coroutine result
@@ -31,23 +34,42 @@ public:
     //! The coroutine promise type
     struct promise_type:
         log_promise<promise_type, task, std::suspend_always,
-            std::suspend_always, R, std::type_identity, std::type_identity>,
-        log_awaitable<promise_type, std::type_identity>,
-        log_awaiter<promise_type>
+            std::suspend_always, R, std::type_identity, std::type_identity>
     {
         //! Disable a coroutine without a scheduler as the first parameter.
         promise_type() = delete;
         //! Creates the promise object and associates it with a scheduler.
         /*! \tparam Args the remaining coroutine parameters
          * \param[in] sched the scheduler used by this coroutine */
-        template <class ...Args> explicit promise_type(Sched& sched, Args...):
+        template <class ...Args> explicit promise_type(Sched& sched, Args&&...):
             sched(sched)
         {}
+        //! Creates the promise object and associates it with a scheduler.
+        /*! This constructor is used if the coroutine is a non-static member
+         * function of class \a T
+         * \tparam T the class containing this coroutine as a non-static member
+         * function
+         * \tparam Args the remaining coroutine parameters
+         * \param[in] sched the scheduler used by this coroutine */
+        template <class T, class ...Args>
+        explicit promise_type(T&&, Sched& sched, Args&&...):
+            sched(sched)
+        {}
+        //! Default copy
+        promise_type(const promise_type&) = default;
+        //! Default move
+        promise_type(promise_type&&) noexcept = default;
         //! Unregisters the coroutine from the scheduler
         ~promise_type() {
             if (sch_it != typename Sched::iterator{}) 
                 sched.erase(sch_it);
         }
+        //! Default copy
+        /*! \return \c *this */
+        promise_type& operator=(const promise_type&) = default;
+        //! Default move
+        /*! \return \c *this */
+        promise_type& operator=(promise_type&&) noexcept = default;
         //! Stores the result value from \c co_return
         /*! \tparam T a template parameter used only to make this member
          * function a template, which allows to define it conditionally, only
@@ -69,36 +91,6 @@ public:
                                                         std::forward<T>(expr));
             return {};
         }
-        //! Suspends always
-        /*! \return false */
-        bool await_ready_impl() {
-            return false;
-        }
-        //! Schedules another coroutine
-        /*! \param[in] hnd a handle to this coroutine
-         * \return a handle to a coroutine that will be resumed */
-        std::coroutine_handle<void>
-        await_suspend_impl(std::coroutine_handle<void> hnd) {
-            if (sch_it == typename Sched::iterator{})
-                sch_it = sched.insert(hnd);
-            return sched.resume(sch_it);
-        }
-        //! Generates the result value of await_resume().
-        /*! \tparam T a template parameter used only to make this member
-         * function a template, which allows to define it conditionally, only
-         * if \a R is \c void */
-        template <std::same_as<R> T = R> requires (!std::is_void_v<T>)
-        void await_resume() {
-        }
-        //! Generates the result value of await_resume().
-        /*! \tparam T a template parameter used only to make this member
-         * function a template, which allows to define it conditionally, only
-         * if \a R is \c void
-         * \return the current result */
-        template <std::same_as<R> T = R> requires (!std::is_void_v<T>)
-        const result_type& await_resume() {
-            return current;
-        }
         //! The current result value
         result_type current;
         //! The scheduler used by this coroutine
@@ -112,24 +104,69 @@ public:
     explicit task(promise_type& promise):
         handle(handle_type::from_promise(promise))
     {}
-    //! Default copy
-    task(const task&) = default;
+    //! No copy
+    /*! Because all copies would destroy the same coroutine via copied \ref
+     * handle. */
+    task(const task&) = delete;
     //! Default move
     task(task&&) noexcept = default;
     //! Destroys the coroutine
     ~task() {
         handle.destroy();
     }
-    //! Default copy
-    /*! \return \c *this */
-    task& operator=(const task&) = default;
+    //! No copy
+    /*! Because all copies would destroy the same coroutine via copied \ref
+     * handle.
+     * \return \c *this */
+    task& operator=(const task&) = delete;
     //! Default move
     /*! \return \c *this */
     task& operator=(task&&) noexcept = default;
-    //! Gets the current result value
-    /*! \return the current result value, \c std::nullopt before the first
+    //! Resumes the coroutine and gets the current result value
+    /*! The coroutine is not resumed if it is suspended at the final suspend
+     * point.
+     * \return the current result value, \c std::nullopt before the first
      * result value is created */
     const result_type& operator()() const {
+        if (!handle.done())
+            handle.resume();
+        return handle.promise().current;
+    }
+    //! Tests if the coroutine has finished.
+    /*! \return \c true if the coroutine is suspended at the final suspend
+     * point, \c false otherwise */
+    [[nodiscard]] bool done() const noexcept {
+        return handle.done();
+    }
+    //! Suspends always
+    /*! \return false */
+    bool await_ready_impl() {
+        return false;
+    }
+    //! Schedules another coroutine
+    /*! \param[in] hnd a handle to this coroutine
+     * \return a handle to a coroutine that will be resumed */
+    std::coroutine_handle<void>
+    await_suspend_impl(std::coroutine_handle<void> hnd) {
+        promise_type& p = handle.promise();
+        if (p.sch_it == typename Sched::iterator{})
+            p.sch_it = p.sched.insert(hnd);
+        return p.sched.resume(p.sch_it);
+    }
+    //! Generates the result value of await_resume().
+    /*! \tparam T a template parameter used only to make this member
+     * function a template, which allows to define it conditionally, only
+     * if \a R is \c void */
+    template <std::same_as<R> T = R> requires (std::is_void_v<T>)
+    void await_resume() {
+    }
+    //! Generates the result value of await_resume().
+    /*! \tparam T a template parameter used only to make this member
+     * function a template, which allows to define it conditionally, only
+     * if \a R is \c void
+     * \return the current result */
+    template <std::same_as<R> T = R> requires (!std::is_void_v<T>)
+    const result_type& await_resume() {
         return handle.promise().current;
     }
 private:

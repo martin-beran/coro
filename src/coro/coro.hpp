@@ -108,7 +108,7 @@ struct log_handle: std::coroutine_handle<Promise> {
     //! Logs construction of the object
     /*! \param[in] p a promise object */
     explicit log_handle(const base_type& p): base_type(p) {
-        log() << this << "->log_handle(Promise=" << &p << ")";
+        log() << this << "->log_handle(Promise=" << &p.promise() << ")";
     }
     //! Default copy
     log_handle(const log_handle&) = default;
@@ -195,9 +195,9 @@ struct log_promise: impl::return_void_or_value<Promise, Return> {
     InitialSuspend initial_suspend() {
         InitialSuspend s{};
         if constexpr (impl::printable<InitialSuspend>)
-            log() << "log_handle(" << this << ")->initial_suspend()=" << s;
+            log() << "log_promise(" << this << ")->initial_suspend()=" << s;
         else
-            log() << "log_handle(" << this << ")->initial_suspend()";
+            log() << "log_promise(" << this << ")->initial_suspend()";
         return s;
     }
     //! Creates the final suspend object
@@ -207,9 +207,9 @@ struct log_promise: impl::return_void_or_value<Promise, Return> {
         FinalSuspend s{};
         try {
             if constexpr (impl::printable<FinalSuspend>)
-                log() << "log_handle(" << this << ")->final_suspend()=" << s;
+                log() << "log_promise(" << this << ")->final_suspend()=" << s;
             else
-                log() << "log_handle(" << this << ")->final_suspend()";
+                log() << "log_promise(" << this << ")->final_suspend()";
         } catch (...) {
         }
         return s;
@@ -219,10 +219,10 @@ struct log_promise: impl::return_void_or_value<Promise, Return> {
         try {
             std::rethrow_exception(std::current_exception());
         } catch (std::exception& e) {
-            log() << "log_handle(" << this << ")->unhandled_exception(" <<
+            log() << "log_promise(" << this << ")->unhandled_exception(" <<
                 e.what() << ")";
         } catch (...) {
-            log() << "log_handle(" << this << ")->unhandled_exception()";
+            log() << "log_promise(" << this << ")->unhandled_exception()";
         }
     }
     //! Called by \c co_await
@@ -234,11 +234,11 @@ struct log_promise: impl::return_void_or_value<Promise, Return> {
     template <class Expr> requires impl::transformer<Await<Expr>>
     typename Await<Expr>::type await_transform(Expr&& expr) {
         if constexpr (impl::printable<Expr>)
-            log() << "log_handle(" << this << ")->log_await_transform(" <<
+            log() << "log_promise(" << this << ")->log_await_transform(" <<
                 expr << ")";
         else
-            log() << "log_handle(" << this << ")->log_await_transform()";
-        return typename Await<Expr>::type{std::forward<Expr>(expr)};
+            log() << "log_promise(" << this << ")->log_await_transform()";
+        return typename Await<Expr>::type(std::forward<Expr>(expr));
     }
     //! Called by \c co_yield
     /*! It is not defined if \c Yield<Expr> does not satisfy impl::transformer,
@@ -252,7 +252,7 @@ struct log_promise: impl::return_void_or_value<Promise, Return> {
             log() << "log_promise(" << this << ")->yield_value(" << expr << ")";
         else
             log() << "log_promise(" << this << ")->yield_value()";
-        return typename Yield<Expr>::type{std::forward<Expr>(expr)};
+        return typename Yield<Expr>::type(std::forward<Expr>(expr));
     }
 };
 
@@ -261,9 +261,10 @@ struct log_promise: impl::return_void_or_value<Promise, Return> {
  * \tparam Awaiter a mapping to an awaiter type */
 template <class Awaitable, template <class> class Awaiter>
 struct log_awaitable {
-    static_assert(std::derived_from<Awaitable, log_awaitable>);
     //! Logs construction of the object
     log_awaitable() {
+        static_assert(std::derived_from<std::remove_reference_t<Awaitable>,
+                      log_awaitable>);
         log() << this << "->log_awaitable()";
     }
     //! Default copy
@@ -294,7 +295,7 @@ struct log_awaitable {
             log() << "log_awaitable(" << this << ")->co_await(" << self << ")";
         else
             log() << "log_awaitable(" << this << ")->co_await()";
-        return typename Awaiter<Awaitable>::type{self};
+        return typename Awaiter<Awaitable>::type(self);
     }
 };
 
@@ -320,7 +321,7 @@ typename Awaiter<Awaitable>::type operator co_await(Awaitable&& awaitable)
     else
         log() << "operator co_await(" << &awaitable << ")";
     return
-        typename Awaiter<Awaitable>::type{std::forward<Awaitable>(awaitable)};
+        typename Awaiter<Awaitable>::type(std::forward<Awaitable>(awaitable));
 }
 
 //! The base awaiter class with logging at interesting places
@@ -330,9 +331,9 @@ typename Awaiter<Awaitable>::type operator co_await(Awaitable&& awaitable)
  * \tparam Log whether to log construction and destruction (set to \c false in
  * log_avaitable_awaiter) */
 template <class Awaiter, bool Log = true> struct log_awaiter {
-    static_assert(std::derived_from<Awaiter, log_awaiter>);
     //! Logs construction of the object
     log_awaiter() {
+        static_assert(std::derived_from<Awaiter, log_awaiter>);
         log() << this << "->log_awaiter()";
     }
     //! Default copy
