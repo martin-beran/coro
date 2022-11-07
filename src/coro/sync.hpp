@@ -13,10 +13,8 @@ namespace coro {
  * \tparam R the result type of the coroutine
  * \test in file test_sync.cpp */
 template <class R> class sync {
-    //! A helper class for void return value.
-    struct empty {};
     //! The type for storing coroutine result
-    using result_type = std::conditional_t<std::is_void_v<R>, empty, R>;
+    using result_type = std::conditional_t<std::is_void_v<R>, impl::empty, R>;
 public:
     struct promise_type;
     //! The coroutine handle type

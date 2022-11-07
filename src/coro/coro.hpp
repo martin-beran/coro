@@ -15,6 +15,9 @@ namespace coro {
 //! This namespace contains various implementation details
 namespace impl {
 
+//! A helper empty class
+struct empty {};
+
 //! A type that can be written to an output stream
 /*! \tparam T a type */
 template <class T> concept printable = requires (std::ostream os, T v) {

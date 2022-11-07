@@ -22,11 +22,9 @@ template <class R, scheduler Sched> class task:
         public log_awaitable<task<R, Sched>&, std::type_identity>,
         public log_awaiter<task<R, Sched>>
 {
-    //! A helper class for void return value
-    struct empty {};
     //! The type for storing coroutine result
     using result_type =
-        std::optional<std::conditional_t<std::is_void_v<R>, empty, R>>;
+        std::optional<std::conditional_t<std::is_void_v<R>, impl::empty, R>>;
 public:
     struct promise_type;
     //! The coroutine handle type
