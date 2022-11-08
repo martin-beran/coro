@@ -167,3 +167,98 @@ BOOST_AUTO_TEST_CASE(yield2)
     BOOST_CHECK_EQUAL(result, "Hello World!");
 }
 //! \endcond
+
+/*! \file
+ * \test yield4 -- Several mutually resuming coro::task coroutines */
+//! \cond
+BOOST_AUTO_TEST_CASE(yield4)
+{
+    coro::sched_rr scheduler;
+    struct coroutine {
+        using task_type = coro::task<void, coro::sched_rr>;
+        static task_type task1(coro::sched_rr&, std::string& result) {
+            result.append("Hello");
+            co_await task_type::yield{};
+            result.append(" ");
+            co_await task_type::yield{};
+        }
+        static task_type task2(coro::sched_rr&, std::string& result) {
+            result.append(" ");
+            co_await task_type::yield{};
+            result.append("Hello");
+            co_await task_type::yield{};
+        }
+        static task_type task3(coro::sched_rr&, std::string& result) {
+            result.append("World");
+            co_await task_type::yield{};
+            result.append(" ");
+            co_await task_type::yield{};
+        }
+        static task_type task4(coro::sched_rr&, std::string& result) {
+            result.append("!");
+            co_await task_type::yield{};
+            result.append("again...");
+            co_await task_type::yield{};
+        }
+    };
+    std::string result{};
+    coro::log() << "coroutine1 create";
+    auto co1 = coroutine::task1(scheduler, result);
+    coro::log() << "coroutine2 create";
+    auto co2 = coroutine::task2(scheduler, result);
+    coro::log() << "coroutine3 create";
+    auto co3 = coroutine::task3(scheduler, result);
+    coro::log() << "coroutine4 create";
+    auto co4 = coroutine::task4(scheduler, result);
+    coro::log() << "coroutine start";
+    co1();
+    coro::log() << "result=" << result;
+    BOOST_CHECK_EQUAL(result, "Hello World! Hello again...");
+}
+//! \endcond
+
+/*! \file
+ * \test yield_some -- Several mutually resuming coro::task coroutines, not all
+ * terminating in the same cycle */
+//! \cond
+BOOST_AUTO_TEST_CASE(yield_some)
+{
+    coro::sched_rr scheduler;
+    struct coroutine {
+        using task_type = coro::task<void, coro::sched_rr>;
+        static task_type task1(coro::sched_rr&, std::string& result) {
+            result.append("Hello");
+            co_await task_type::yield{};
+            result.append(" ");
+            co_await task_type::yield{};
+        }
+        static task_type task2(coro::sched_rr&, std::string& result) {
+            result.append(" ");
+            co_await task_type::yield{};
+        }
+        static task_type task3(coro::sched_rr&, std::string& result) {
+            result.append("World");
+            co_await task_type::yield{};
+            result.append("Hello again...");
+            co_await task_type::yield{};
+        }
+        static task_type task4(coro::sched_rr&, std::string& result) {
+            result.append("!");
+            co_return;
+        }
+    };
+    std::string result{};
+    coro::log() << "coroutine1 create";
+    auto co1 = coroutine::task1(scheduler, result);
+    coro::log() << "coroutine2 create";
+    auto co2 = coroutine::task2(scheduler, result);
+    coro::log() << "coroutine3 create";
+    auto co3 = coroutine::task3(scheduler, result);
+    coro::log() << "coroutine4 create";
+    auto co4 = coroutine::task4(scheduler, result);
+    coro::log() << "coroutine start";
+    co1();
+    coro::log() << "result=" << result;
+    BOOST_CHECK_EQUAL(result, "Hello World! Hello again...");
+}
+//! \endcond
