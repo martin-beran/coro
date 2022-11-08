@@ -24,12 +24,15 @@ public:
      * \param[in] hnd a coroutine handle
      * \return iterator to the registration record */
     iterator insert(std::coroutine_handle<void> hnd) {
-        return storage.insert(storage.end(), hnd);
+        auto it = storage.insert(storage.end(), hnd);
+        coro::log() << "sched_rr::insert()=" << &*it;
+        return it;
     }
     //! Unregisters a coroutine
     /*! The coroutine \a it must be currently registered in this scheduler.
      * \param[in] it an iterator returned by insert() */
     void erase(iterator it) {
+        coro::log() << "sched_rr::erase(" << &*it << ")";
         storage.erase(it);
     }
     //! Resumes a coroutine.
@@ -37,11 +40,14 @@ public:
      * the last to the first. It resumes itself if \a it is the only registered
      * coroutine.
      * \param[in] it an iterator returned by insert()
-     * \return a handle of the coroutine that will be resumed */
-    std::coroutine_handle<void> resume(iterator it) {
+     * \return a pair containg a handle of the coroutine that will be resumed
+     * and an indicator if the returned handle is different from the handle
+     * referenced by \a it */
+    std::pair<std::coroutine_handle<void>, bool> resume(iterator it) {
         if (++it == storage.end())
             it = storage.begin();
-        return *it;
+        coro::log() << "sched_rr::resume()=" << &*it;
+        return {*it, storage.size() > 1};
     }
 private:
     //! The registered coroutines

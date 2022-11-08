@@ -69,6 +69,7 @@ BOOST_AUTO_TEST_CASE(result)
 
 /*! \file
  * \test await -- A coro::task that awaits another coro::task */
+//! \cond
 BOOST_AUTO_TEST_CASE(await)
 {
     coro::sched_rr scheduler;
@@ -78,8 +79,9 @@ BOOST_AUTO_TEST_CASE(await)
         {
             coro::log() << "task1 i1=" << i1 << " i2=" << i2;
             auto t2 = task2(sched, i2);
+            coro::log() << "task2 created";
             std::optional<int> v = co_await t2;
-            BOOST_CHECK(v.has_value());
+            BOOST_REQUIRE(v.has_value());
             int res = i1 + *v;
             coro::log() << "task1 v=" << *v << " return=" << res;
             co_return res;
@@ -96,3 +98,72 @@ BOOST_AUTO_TEST_CASE(await)
     BOOST_REQUIRE(v.has_value());
     BOOST_CHECK_EQUAL(*v, 3);
 }
+//! \endcond
+
+/*! \file
+ * \test yield1 -- A coro::task that resumes itself */
+//! \cond
+BOOST_AUTO_TEST_CASE(yield)
+{
+    coro::sched_rr scheduler;
+    struct coroutine {
+        using task_type = coro::task<std::string, coro::sched_rr>;
+        static task_type task(coro::sched_rr&) {
+            std::string result{};
+            co_await task_type::yield{};
+            result.append("Hello");
+            co_await task_type::yield{};
+            result.append(" ");
+            co_await task_type::yield{};
+            result.append("World");
+            co_await task_type::yield{};
+            result.append("!");
+            co_return result;
+        }
+    };
+    std::string result{};
+    coro::log() << "coroutine create";
+    auto co = coroutine::task(scheduler);
+    coro::log() << "coroutine start";
+    while (!co.done()) {
+        const std::optional<std::string>& v = co();
+        BOOST_REQUIRE(v.has_value());
+        coro::log() << "v=" << *v;
+        result.append(*v);
+    }
+    BOOST_CHECK_EQUAL(result, "Hello World!");
+}
+//! \endcond
+
+/*! \file
+ * \test yield2 -- A coro::task that resumes another task */
+//! \cond
+BOOST_AUTO_TEST_CASE(yield2)
+{
+    coro::sched_rr scheduler;
+    struct coroutine {
+        using task_type = coro::task<void, coro::sched_rr>;
+        static task_type task1(coro::sched_rr&, std::string& result) {
+            co_await task_type::yield{};
+            result.append(" ");
+            co_await task_type::yield{};
+            result.append("!");
+        }
+        static task_type task2(coro::sched_rr&, std::string& result) {
+            result.append("Hello");
+            co_await task_type::yield{};
+            result.append("World");
+            co_await task_type::yield{};
+        }
+    };
+    std::string result{};
+    coro::log() << "coroutine1 create";
+    auto co1 = coroutine::task1(scheduler, result);
+    coro::log() << "coroutine2 create";
+    auto co2 = coroutine::task2(scheduler, result);
+    coro::log() << "coroutine start";
+    co1();
+    coro::log() << "result=" << result;
+    BOOST_CHECK_EQUAL(result, "Hello World!");
+}
+//! \endcond

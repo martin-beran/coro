@@ -19,6 +19,10 @@ _This is a work in progress. It is currently usable for experiments with
 coroutines and for learning how coroutines work. It is incomplete, probably
 buggy, and not suitable for any production use._
 
+There are subtle bugs or differences related to coroutine support in
+various kinds and versions of compilers. This library is currently being
+developed using GCC 12.1.0.
+
 ## Repository structure
 
 - `doc/` – documentation

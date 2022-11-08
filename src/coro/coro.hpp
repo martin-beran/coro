@@ -12,6 +12,13 @@
 //! The top-level namespace of Coro
 namespace coro {
 
+//! A template that does not satisfy coro::impl::transformer for any type
+/*! \tparam T a mapped type */
+template <class T> struct not_transformer {
+    //! Used to define return_void() instead of return_value() in log_promise
+    static constexpr bool return_void = true;
+};
+
 //! This namespace contains various implementation details
 namespace impl {
 
@@ -87,14 +94,50 @@ template <class Promise, class Return> struct return_void_or_value:
 {
 };
 
-} // namespace impl
-
-//! A template that does not satisfy coro::impl::transformer for any type
-/*! \tparam T a mapped type */
-template <class T> struct not_transformer {
-    //! Used to define return_void() instead of return_value() in log_promise
-    static constexpr bool return_void = true;
+//! The base class that declares \c await_transform() for log_promise
+/*! \tparam Await mapping of the parameter type to the return type of
+ * await_transform() */
+template <template <class> class Await> struct await_transform_impl {
+    //! Called by \c co_await
+    /*! \tparam Expr the type of expression passed to \c co_await
+     * \param[in] expr the expression passed to \c co_await
+     * \return transformed \a expr */
+    template <class Expr> requires impl::transformer<Await<Expr>>
+    typename Await<Expr>::type await_transform(Expr&& expr) {
+        if constexpr (impl::printable<Expr>)
+            log() << "log_promise(" << this << ")->log_await_transform(" <<
+                expr << ")";
+        else
+            log() << "log_promise(" << this << ")->log_await_transform()";
+        return typename Await<Expr>::type(std::forward<Expr>(expr));
+    }
 };
+
+//! The specialization that does not declare await_transform()
+template <> struct await_transform_impl<not_transformer> {};
+
+//! The base class that declares \c yield_value() for log_promise
+/*! \tparam Yield mapping of the parameter type to the return type of
+ * yield_value() */
+template <template <class> class Yield> struct yield_value_impl {
+    //! Called by \c co_yield
+    /*! \tparam Expr the type of expression passed to \c co_yield
+     * \param[in] expr the expression passed to \c co_yield
+     * \return transformed \a expr */
+    template <class Expr> requires impl::transformer<Yield<Expr>>
+    typename Yield<Expr>::type yield_value(Expr&& expr) {
+        if constexpr (impl::printable<Expr>)
+            log() << "log_promise(" << this << ")->yield_value(" << expr << ")";
+        else
+            log() << "log_promise(" << this << ")->yield_value()";
+        return typename Yield<Expr>::type(std::forward<Expr>(expr));
+    }
+};
+
+//! The specialization that does not declare yield_value()
+template <> struct yield_value_impl<not_transformer> {};
+
+} // namespace impl
 
 //! A coroutine handle with logging at interesting places
 /*! \tparam Promise the related promise type */
@@ -142,9 +185,13 @@ struct log_handle: std::coroutine_handle<Promise> {
  * \tparam Yield mapping of the parameter type to the return type of
  * yield_value() */
 template <class Promise, class RetObj, class InitialSuspend, class FinalSuspend,
-    class Return, template <class> class Await,
+    class Return, template <class> class Await = not_transformer,
     template <class> class Yield = not_transformer>
-struct log_promise: impl::return_void_or_value<Promise, Return> {
+struct log_promise:
+    impl::return_void_or_value<Promise, Return>,
+    impl::await_transform_impl<Await>,
+    impl::yield_value_impl<Yield>
+{
     //! A shortcut without template arguments for the current type
     using log_promise_type = log_promise;
     //! Logs construction of the object
@@ -228,35 +275,6 @@ struct log_promise: impl::return_void_or_value<Promise, Return> {
             log() << "log_promise(" << this << ")->unhandled_exception()";
         }
     }
-    //! Called by \c co_await
-    /*! It is not defined if \c Await<Expr> does not satisfy impl::transformer,
-     * which causes using \a expr as-is.
-     * \tparam Expr the type of expression passed to \c co_await
-     * \param[in] expr the expression passed to \c co_await
-     * \return transformed \a expr */
-    template <class Expr> requires impl::transformer<Await<Expr>>
-    typename Await<Expr>::type await_transform(Expr&& expr) {
-        if constexpr (impl::printable<Expr>)
-            log() << "log_promise(" << this << ")->log_await_transform(" <<
-                expr << ")";
-        else
-            log() << "log_promise(" << this << ")->log_await_transform()";
-        return typename Await<Expr>::type(std::forward<Expr>(expr));
-    }
-    //! Called by \c co_yield
-    /*! It is not defined if \c Yield<Expr> does not satisfy impl::transformer,
-     * which causes disabling \c co_yield.
-     * \tparam Expr the type of expression passed to \c co_yield
-     * \param[in] expr the expression passed to \c co_yield
-     * \return transformed \a expr */
-    template <class Expr> requires impl::transformer<Yield<Expr>>
-    typename Yield<Expr>::type yield_value(Expr&& expr) {
-        if constexpr (impl::printable<Expr>)
-            log() << "log_promise(" << this << ")->yield_value(" << expr << ")";
-        else
-            log() << "log_promise(" << this << ")->yield_value()";
-        return typename Yield<Expr>::type(std::forward<Expr>(expr));
-    }
 };
 
 //! A base class of an awaitable class with logging at interesting places
@@ -285,14 +303,16 @@ struct log_awaitable {
     /*! \return \c *this */
     log_awaitable& operator=(log_awaitable&&) noexcept = default;
     //! Converts the awaitable to an awaiter
-    /*! It is not defined if \c Awaiter<Awaitable> does not satisfy
-     * impl::transformer, which causes using \a Awaitable as-is
+    /*! If not defined, \a Awaitable is used as-is.
+     * \tparam T a template parameter used only to make this member function a
+     * template, which allows to define it conditionally, only if \c
+     * Awaiter<Awaitable> satisfies impl::transformer
      * \return \c this converted to \a Awaitable, which is its real dynamic
      * type, and then transformed to \a Awaiter
-     * \note The dummy template parameter turns this function to a template and
-     * so allows it to be conditionally declared. */
-    template <class = void> requires impl::transformer<Awaiter<Awaitable>>
-    typename Awaiter<Awaitable>::type operator co_await() {
+     * \note Operator \c co_await can be also a non-member function. */
+    template <std::same_as<Awaitable> A = Awaitable>
+        requires impl::transformer<Awaiter<A>>
+    typename Awaiter<A>::type operator co_await() {
         auto& self = static_cast<Awaitable&>(*this);
         if constexpr (impl::printable<Awaitable>)
             log() << "log_awaitable(" << this << ")->co_await(" << self << ")";
@@ -301,31 +321,6 @@ struct log_awaitable {
         return typename Awaiter<Awaitable>::type(self);
     }
 };
-
-//! Controls if <tt>operator co_await()</tt> is defined for type \a T.
-/*! The operator is not defined by default, but can be enabled by defining
- * specializations derived from \c std::true_type.
- * \tparam T a type */
-template <class T> struct define_co_await: std::false_type {};
-
-//! A non-member alternative to log_awaitable::operator co_await()
-/*! It is defined only if <tt>define_co_await<Awaitable>::value</tt> is \c
- * true.
- * \tparam Awaitable an awaitable class
- * \tparam Awaiter a mapping to an awaiter type
- * \param[in] awaitable an awaitable object
- * \return the awaiter object corresponding to \a awaitable */
-template <class Awaitable, template <class> class Awaiter>
-    requires define_co_await<Awaitable>::value
-typename Awaiter<Awaitable>::type operator co_await(Awaitable&& awaitable)
-{
-    if constexpr (impl::printable<Awaitable>)
-        log() << "operator co_await(" << &awaitable << "=" << awaitable << ")";
-    else
-        log() << "operator co_await(" << &awaitable << ")";
-    return
-        typename Awaiter<Awaitable>::type(std::forward<Awaitable>(awaitable));
-}
 
 //! The base awaiter class with logging at interesting places
 /*! It expects the real awaiter implementation in derived class \a Awaiter and
@@ -426,7 +421,8 @@ template <class T> concept scheduler =
         typename T::iterator;
         { sched.insert(co) } -> std::same_as<typename T::iterator>;
         sched.erase(it);
-        { sched.resume(it) } -> std::same_as<std::coroutine_handle<void>>;
+        { sched.resume(it) } ->
+            std::same_as<std::pair<std::coroutine_handle<void>, bool>>;
     };
 
 } // namespace coro
